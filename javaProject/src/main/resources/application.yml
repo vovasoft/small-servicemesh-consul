@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: java-service  # 当前服务的名称，在 Consul 中注册的名称
+  cloud:
+    consul:
+      host: localhost   # Consul 的主机地址
+      port: 8500        # Consul 的端口，默认是 8500
+      discovery:
+        enabled: true   # 启用 Consul 服务发现
+        register: true  # 允许应用自动注册到 Consul
+        prefer-ip-address: true  # 使用 IP 地址注册服务
+        health-check-path: /actuator/health # 健康检查路径
+        health-check-interval: 30s # 健康检查的时间间隔
+      config:
+        enabled: false  # 你可以启用这个选项，如果你想使用 Consul 作为配置源
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info  # 暴露健康检查和基本信息的端点
+
+server:
+  port: 8080  # 服务运行的端口
+
+# 日志配置（可选）
+logging:
+  level:
+    root: INFO

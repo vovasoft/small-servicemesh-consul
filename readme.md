@@ -1,4 +1,4 @@
-# Service Mesh Consul 和 Java
+# Service Mesh Consul and Java
 
 为了在 M1 芯片的 MacBook 上使用 Consul 实现一个基于 Java 的 Service Mesh demo，我将提供详细的步骤，从开发环境的设置到实际服务的配置和测试。以下是详细的步骤，帮助你快速完成基于 Consul 的 Service Mesh demo。
 
@@ -86,17 +86,94 @@ consul agent -dev
 
 ##### 2.2.2 添加 Consul 依赖
 
-在 `pom.xml` 中，确保包含 Consul 的依赖项：
+在 `pom.xml` 中，确保包含 Consul 的依赖项（下面的全量pom）：
 
 ```xml
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-consul-discovery</artifactId>
-</dependency>
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-consul-config</artifactId>
-</dependency>
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>groupId</groupId>
+    <artifactId>javaProject</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <packaging>jar</packaging>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.8</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+
+    <properties>
+        <java.version>17</java.version>
+        <spring-cloud.version>2021.0.5</spring-cloud.version>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Boot Web Starter -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Actuator (for health checks) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Spring Cloud Consul Discovery -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-consul-discovery</artifactId>
+        </dependency>
+
+        <!-- Spring Cloud Consul Config (optional, if you want to use config management) -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-consul-config</artifactId>
+        </dependency>
+
+        <!-- Lombok (optional, for reducing boilerplate code) -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
 ```
 
 ##### 2.2.3 配置 Consul 连接
@@ -105,14 +182,35 @@ consul agent -dev
 
 ```yaml
 spring:
+  application:
+    name: java-service  # 当前服务的名称，在 Consul 中注册的名称
   cloud:
     consul:
-      host: localhost
-      port: 8500
+      host: localhost   # Consul 的主机地址
+      port: 8500        # Consul 的端口，默认是 8500
       discovery:
-        enabled: true
+        enabled: true   # 启用 Consul 服务发现
+        register: true  # 允许应用自动注册到 Consul
+        prefer-ip-address: true  # 使用 IP 地址注册服务
+        health-check-path: /actuator/health # 健康检查路径
+        health-check-interval: 30s # 健康检查的时间间隔
       config:
-        enabled: true
+        enabled: false  # 你可以启用这个选项，如果你想使用 Consul 作为配置源
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info  # 暴露健康检查和基本信息的端点
+
+server:
+  port: 8080  # 服务运行的端口
+
+# 日志配置（可选）
+logging:
+  level:
+    root: INFO
+
 ```
 
 ##### 2.2.4 创建一个简单的 Controller
@@ -149,7 +247,17 @@ public class HelloController {
 你可以为服务添加健康检查机制，确保服务的状态正常。例如，Spring Boot 项目自带健康检查端点（/actuator/health），你可以在 Consul 中添加一个健康检查项：
 
 ```bash
-consul services register -name=java-service -port=8080 -check="http://localhost:8080/actuator/health"
+curl --request PUT --data '{
+  "ID": "java-service",
+  "Name": "java-service",
+  "Address": "localhost",
+  "Port": 8080,
+  "Check": {
+    "HTTP": "http://localhost:8080/actuator/health",
+    "Interval": "30s",
+    "Timeout": "5s"
+  }
+}' http://localhost:8500/v1/agent/service/register
 ```
 
 #### 3.3 **流量控制**
@@ -188,7 +296,7 @@ curl http://localhost:8080/hello
 
 
 
-# Service Mesh Consul 和 Golang
+# Service Mesh Consul and Golang
 
 ### **步骤 1: 准备环境**
 
@@ -234,9 +342,9 @@ brew install go
 创建项目目录，并编写 Go 程序：
 
 ```bash
-mkdir consul-golang-service
-cd consul-golang-service
-go mod init consul-golang-service
+mkdir golangProject
+cd golangProject
+go mod init golangProject
 ```
 
 ##### 3.2.2 **编写 Go 服务**
@@ -301,6 +409,8 @@ func main() {
 在终端中运行 Golang 服务：
 
 ```bash
+go mod tidy
+
 go run main.go
 ```
 
@@ -378,161 +488,37 @@ registration := &api.AgentServiceRegistration{
 
 在 Consul 中，可以设置流量控制策略和加密规则，确保服务间通信的安全性。
 
-### **步骤 5: 总结**
 
-通过上述步骤，你已经创建了一个简单的 Consul Service Mesh demo，使用 Java 和 Golang 实现了两个服务，并通过 Consul 实现了服务发现和通信。你可以根据需要进一步扩展这个 demo，例如添加更多的微服务、配置服务网格的安全和流量管理特性等。
-
-如果你希望进一步启用更复杂的流量控制、负载均衡或安全功能，可以研究 Consul Connect 的详细配置和策略规则。
 
 # Java与Golang服务相互调用
 
-你说得对，之前的步骤仅实现了将 Java 和 Golang 服务注册到 Consul 中，但并没有真正展示服务间的调用及 Consul Service Mesh 的特性。接下来，我们将详细说明如何让 Java 和 Golang 服务通过 Consul 进行服务发现并相互调用，真正体现出 Service Mesh 的特点。
-
-### **步骤 1: 实现服务发现与相互调用**
-
-在这个步骤中，我们将让 Java 服务调用 Golang 服务，并展示如何通过 Consul 实现服务发现。我们将分别为 Java 和 Golang 服务配置，使它们能够通过 Consul 发现对方，并进行相互调用。
-
-#### **1.1 Java 服务调用 Golang 服务**
-
-我们首先在 Java 服务中实现对 Golang 服务的调用，具体步骤如下：
-
-##### 1.1.1 **引入必要依赖**
-
-确保 `pom.xml` 中包含 RestTemplate 和服务发现相关的依赖：
-
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-web</artifactId>
-</dependency>
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-consul-discovery</artifactId>
-</dependency>
-```
-
-##### 1.1.2 **配置 RestTemplate 以便调用其他服务**
-
-在 Java 服务中，使用 Spring 的 `RestTemplate` 来调用 Golang 服务。确保配置 RestTemplate Bean：
-
-```java
-@Bean
-public RestTemplate restTemplate() {
-    return new RestTemplate();
-}
-```
-
-##### 1.1.3 **调用 Golang 服务**
-
-修改 Java 控制器，使其通过 Consul 发现 Golang 服务并进行调用：
+### 步骤 1:修改 Java 控制器
 
 ```java
 @Autowired
 private RestTemplate restTemplate;
 
-@GetMapping("/call-golang")
-public String callGolang() {
-    // 假设 golang-service 运行在 Consul 并注册为 golang-service
-    String golangServiceUrl = "http://localhost:8500/v1/catalog/service/golang-service";
-    
-    // 通过 Consul 的 API 获取 golang-service 的注册信息
-    ResponseEntity<String> response = restTemplate.getForEntity(golangServiceUrl, String.class);
-    
-    // 解析 Consul 返回的数据，获取 golang-service 的 IP 和端口
-    // 简单实现解析返回的服务列表，这里假设只有一个实例
-    // 正常情况下你会用 JSON 解析库来解析更复杂的结果
-    String serviceAddress = "http://localhost:9090/hello";
-    
-    // 通过获取到的地址，调用 golang-service 提供的接口
-    String golangResponse = restTemplate.getForObject(serviceAddress, String.class);
-    
-    return "Response from Golang Service: " + golangResponse;
-}
+@GetMapping("/call-golang-consul")
+    public String callGolangForConsul() {
+        // 假设 golang-service 运行在 Consul 并注册为 golang-service
+        String golangServiceUrl = "http://localhost:8500/v1/catalog/service/golang-service";
+
+        // 通过 Consul 的 API 获取 golang-service 的注册信息
+        ResponseEntity<String> response = restTemplate.getForEntity(golangServiceUrl, String.class);
+
+        // 解析 Consul 返回的数据，获取 golang-service 的 IP 和端口
+        // 简单实现解析返回的服务列表，这里假设只有一个实例
+        // 正常情况下你会用 JSON 解析库来解析更复杂的结果
+        String serviceAddress = "http://localhost:9090/hello";
+
+        // 通过获取到的地址，调用 golang-service 提供的接口
+        String golangResponse = restTemplate.getForObject(serviceAddress, String.class);
+
+        return "Response from Golang Service: " + golangResponse;
+    }
 ```
 
-通过这个 `/call-golang` 端点，Java 服务将通过 Consul 发现并调用 Golang 服务的 `/hello` 端点。
-
-#### **1.2 Golang 服务调用 Java 服务**
-
-现在，让 Golang 服务通过 Consul 调用 Java 服务。我们需要在 Golang 服务中实现类似的逻辑。
-
-##### 1.2.1 **编写 Golang 代码调用 Java 服务**
-
-在 Golang 项目的 `main.go` 中，使用 Consul API 获取 Java 服务的地址并进行调用：
-
-```go
-package main
-
-import (
-    "fmt"
-    "log"
-    "net/http"
-    "io/ioutil"
-    "github.com/hashicorp/consul/api"
-)
-
-func callJavaService() (string, error) {
-    config := api.DefaultConfig()
-    consulClient, err := api.NewClient(config)
-    if err != nil {
-        return "", fmt.Errorf("Failed to connect to Consul: %v", err)
-    }
-
-    // 获取 Java 服务的注册信息
-    services, _, err := consulClient.Catalog().Service("java-service", "", nil)
-    if err != nil {
-        return "", fmt.Errorf("Failed to get java-service from Consul: %v", err)
-    }
-
-    if len(services) == 0 {
-        return "", fmt.Errorf("No instances of java-service found")
-    }
-
-    // 获取 Java 服务的第一个实例
-    serviceAddress := fmt.Sprintf("http://%s:%d/hello", services[0].ServiceAddress, services[0].ServicePort)
-
-    // 调用 Java 服务
-    resp, err := http.Get(serviceAddress)
-    if err != nil {
-        return "", fmt.Errorf("Failed to call Java service: %v", err)
-    }
-    defer resp.Body.Close()
-
-    body, err := ioutil.ReadAll(resp.Body)
-    if err != nil {
-        return "", fmt.Errorf("Failed to read response from Java service: %v", err)
-    }
-
-    return string(body), nil
-}
-
-func helloHandler(w http.ResponseWriter, r *http.Request) {
-    // 调用 Java 服务
-    javaServiceResponse, err := callJavaService()
-    if err != nil {
-        log.Printf("Error calling Java service: %v", err)
-        http.Error(w, "Error calling Java service", http.StatusInternalServerError)
-        return
-    }
-
-    // 返回 Java 服务的响应
-    fmt.Fprintf(w, "Response from Java Service: %s", javaServiceResponse)
-}
-
-func main() {
-    // 设置路由
-    http.HandleFunc("/call-java", helloHandler)
-
-    // 启动服务器
-    log.Println("Starting Golang service on port 9090...")
-    err := http.ListenAndServe(":9090", nil)
-    if err != nil {
-        log.Fatalf("Failed to start server: %v", err)
-    }
-}
-```
-
-这个 Golang 服务将通过 Consul 的 API 获取 Java 服务的地址，并调用它的 `/hello` 端点。
+通过这个 `/call-golang-consul` 端点，Java 服务将通过 Consul 发现并调用 Golang 服务的 `/hello` 端点。
 
 ### **步骤 2: 验证相互调用**
 
@@ -559,42 +545,12 @@ func main() {
    - 访问 Java 服务调用 Golang 服务：
 
      ```bash
-     curl http://localhost:8080/call-golang
+     curl http://localhost:8080/call-golang-consul
      ```
-
-   - 访问 Golang 服务调用 Java 服务：
-
-     ```bash
-     curl http://localhost:9090/call-java
-     ```
-
-你应该能够看到相互调用的结果，证明两个服务通过 Consul 实现了服务发现和通信。
 
 ### **步骤 3: 实现 Service Mesh 特性**
 
-#### **3.1 启用 Consul Connect**
-
-要真正体现 Service Mesh 的特性，可以启用 Consul Connect，让服务之间的通信通过 sidecar 代理实现 mTLS 加密和流量控制。
-
-1. 在 Consul 中为服务注册启用 `connect`。
-
-   - 在 Golang 服务和 Java 服务注册时，启用 `Connect` 支持：
-
-     ```go
-     registration := &api.AgentServiceRegistration{
-         ID:      "golang-service",
-         Name:    "golang-service",
-         Address: "localhost",
-         Port:    9090,
-         Connect: &api.AgentServiceConnect{
-             Native: true,
-         },
-     }
-     ```
-
-2. 配置 Consul 的代理来管理服务间通信。
-
-#### **3.2 设置流量策略**
+#### **设置流量策略**
 
 使用 Consul 的服务网格功能，你可以配置流量管理策略，比如：
 
@@ -603,7 +559,3 @@ func main() {
 - **限流**: 限制服务间通信的流量。
 
 你可以通过 Consul 的 UI 或配置文件来设置这些策略。
-
-### **总结**
-
-通过这些步骤，你已经实现了 Java 和 Golang 服务之间的相互调用，并通过 Consul 实现了服务发现和通信。这体现了 Consul Service Mesh 的基本功能。接下来，你可以进一步启用 Consul Connect 以启用加密通信、流量控制和安全策略等更高级的 Service Mesh 特性。如果有任何问题，随时可以继续讨论。
